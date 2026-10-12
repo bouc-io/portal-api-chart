@@ -1,0 +1,90 @@
+# Sandbox-specific values for portal-api-chart
+# Only include values that differ from base or local, or are required for sandbox
+
+replicaCount: 2
+
+image:
+  registry: ghcr.io/bouc-io
+  repository: application/portal/portal-api-server
+  tag: "latest"
+  pullPolicy: IfNotPresent
+  # tag will be managed by FluxCD, do not set here
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: portal-sandbox.bouc.io
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls:
+    - secretName: portal-sandbox-tls
+      hosts:
+        - portal-sandbox.bouc.io
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 200m
+    memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 75
+
+postgresql:
+  enabled: true
+  global:
+    security:
+      allowInsecureImages: true # Required now since we move to Bitnami Legacy for now.
+  image:
+    registry: docker.io
+    repository: bitnamilegacy/postgresql
+    tag: 17.5.0-debian-12-r18
+  auth:
+    username: ps_portal_snbx
+    database: ps_portal_db_snbx
+    # Both the bundled Postgres and the app read from this ESO-managed Secret:
+    # Postgres takes the `password` key, the app takes the `DATABASE_URL` key that
+    # the ExternalSecret template assembles. Keep username and database in sync
+    # with the DSN in infrastructure/external-secrets/externalsecrets/sandbox/.
+    existingSecret: boucio-portal-db-secret
+    secretKeys:
+      adminPasswordKey: password
+      userPasswordKey: password
+  architecture: standalone
+
+environment:
+  # Environment identity for telemetry labels. ${ENVIRONMENT_ID} is substituted from the
+  # manually-created cluster-vars ConfigMap by Flux postBuild (local-config Kustomization).
+  ENVIRONMENT_ID: "${ENVIRONMENT_ID}"
+  NODE_ENV: "production"
+  PORT: 3001
+  LOG_LEVEL: "info"
+  ALLOW_SELF_SIGNED_CERTS: "false"
+
+externalDatabase:
+  host: ""
+  port: 5432
+  user: bn_portal
+  database: bitnami_portal
+  password: ""
+  existingSecret: ""
+  existingSecretHostKey: ""
+  existingSecretPortKey: ""
+  existingSecretUserKey: ""
+  existingSecretDatabaseKey: ""
+  existingSecretPasswordKey: ""
+  annotations: {}
